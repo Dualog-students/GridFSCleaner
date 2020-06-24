@@ -63,6 +63,8 @@ namespace GridFSCleaner
                 Hint = "files_id_1_n_1"
             };
 
+            var maxDaysOld = DateTime.UtcNow.AddDays(-7);
+
             try
             {
                 Log.Information("Creating cursor and starting search of orphaned chunks..");
@@ -83,10 +85,16 @@ namespace GridFSCleaner
                             continue;
                         }
 
+                        // Don't touch chunks that are "fresh" and might be part of an ongoing upload
+                        if (fileId.CreationTime > maxDaysOld)
+                        {
+                            continue;
+                        }
+
+                        // If the file exists, add it to our list and move on
                         var fileCount = await files.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("_id", fileId), null, cts.Token);
                         if (fileCount > 0)
                         {
-                            // If the file exists, add it to our list and move on
                             validFiles.Add(fileId);
                             continue;
                         }
@@ -98,6 +106,7 @@ namespace GridFSCleaner
                 Log.Information("Found '{0}' files and {1} orphaned chunks.", filesToDelete.Count, orphanedChunks);
                 Log.Information("Elapsed time: {0}", sw.Elapsed.ToString());
                 Log.Information("Starting deletion process..");
+                Log.Information("Deleting files that are older than {0}", maxDaysOld);
 
                 // Do this outside the cursor loop to avoid cursor timeout
                 foreach (var files_id in filesToDelete)
