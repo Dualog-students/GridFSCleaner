@@ -69,7 +69,7 @@ namespace GridFSCleaner
                 sw.Start();
 
                 using var chunksCursor = await chunks.FindAsync(Builders<BsonDocument>.Filter.Empty, findOptions);
-                while (await chunksCursor.MoveNextAsync())
+                while (await chunksCursor.MoveNextAsync(cts.Token))
                 {
                     orphanedChunks += (ulong)chunksCursor.Current.Count();
                     var uniqueFileIds = chunksCursor.Current.Select(x => x["files_id"].AsObjectId).ToHashSet();
@@ -83,7 +83,7 @@ namespace GridFSCleaner
                             continue;
                         }
 
-                        var fileCount = await files.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("_id", fileId));
+                        var fileCount = await files.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("_id", fileId), null, cts.Token);
                         if (fileCount > 0)
                         {
                             // If the file exists, add it to our list and move on
@@ -104,14 +104,14 @@ namespace GridFSCleaner
                 {
                     if (isDryRun)
                     {
-                        var deleteResult = await chunks.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("files_id", files_id));
+                        var deleteResult = await chunks.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("files_id", files_id), null, cts.Token);
                         Log.Information("Dry-run: Could delete {0} chunks from orphaned file {@1}", deleteResult, new { Id = files_id.ToString(), files_id.CreationTime });
                         filesDeleted++;
                     }
                     else
                     {
                         // If we know it isn't valid, delete all possible chunks with a single command
-                        var deleteResult = await chunks.DeleteManyAsync(Builders<BsonDocument>.Filter.Eq("files_id", files_id));
+                        var deleteResult = await chunks.DeleteManyAsync(Builders<BsonDocument>.Filter.Eq("files_id", files_id), cts.Token);
                         Log.Information("Deleted {0} chunks from orphaned file {@1}", deleteResult.DeletedCount, new { Id = files_id.ToString(), files_id.CreationTime });
                         filesDeleted++;
                     }
